@@ -1,5 +1,4 @@
 @import "tailwindcss";
-@import url('/fonts/satoshi/satoshi.css');
 
 :root {
   --background: #f7f7f7;
@@ -21,7 +20,7 @@ body {
 body {
   background-color: var(--background);
   color: var(--foreground);
-  font-family: "Satoshi", sans-serif;
+  /* A font-family é aplicada via classe no layout.js */
 }
 
 a {

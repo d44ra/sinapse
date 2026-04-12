@@ -4,9 +4,9 @@ import { useEffect, useRef, useState } from "react";
 import Matter from "matter-js";
 import Image from "next/image";
 
-import { PROMPTS } from "../data/prompts";
-import { ITEMS, SCALE } from "../data/items";
-import { randomItems, extractTextFromAnswers } from "../lib/utils";
+import { PROMPTS } from "../../data/prompts";
+import { ITEMS, SCALE } from "../../data/items";
+import { randomItems, extractTextFromAnswers } from "../../lib/utils";
 
 const DEFAULT_SLOT_W = 160;
 const DEFAULT_SLOT_H = 80;
