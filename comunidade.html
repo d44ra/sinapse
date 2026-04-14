@@ -1,0 +1,398 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+  <meta charset="UTF-8" />
+  <title>São Paulo Interativo</title>
+
+  <style>
+    @font-face {
+      font-family: "Satoshi";
+      src: local("Satoshi");
+    }
+
+    body {
+      margin: 0;
+      background: #f7f7f7;
+      font-family: "Satoshi", Arial, sans-serif;
+      overflow: hidden;
+    }
+
+    .box {
+      position: absolute;
+      padding: 0 24px;
+      height: 72px;
+      display: flex;
+      align-items: center;
+      border: 2px solid black;
+      background: white;
+      cursor: grab;
+      user-select: none;
+      transition: transform 0.15s;
+      font-size: 40px;
+      font-weight: 600;
+      white-space: nowrap;
+    }
+
+    .box:hover {
+      transform: scale(1.08) rotate(3deg);
+    }
+
+    .drag-preview {
+      position: fixed;
+      pointer-events: none;
+      padding: 0 24px;
+      height: 72px;
+      display: flex;
+      align-items: center;
+      border: 2px solid black;
+      background: white;
+      opacity: 0.75;
+      transform: scale(1.08) rotate(3deg);
+      z-index: 1000;
+      font-size: 40px;
+      font-weight: 600;
+    }
+
+    .input-area {
+      position: absolute;
+      bottom: 80px;
+      left: 50%;
+      transform: translateX(-50%);
+      display: flex;
+      flex-direction: column;
+      gap: 10px;
+    }
+
+    .input-area label {
+      font-size: 30px;
+    }
+
+    .input-row {
+      display: flex;
+      gap: 10px;
+    }
+
+    input {
+      padding: 12px 14px;
+      border: 2px solid black;
+      width: 300px;
+      font-family: "Satoshi", sans-serif;
+      font-size: 18px;
+      outline: none;
+    }
+
+    input:focus {
+      transform: scale(1.03);
+      box-shadow: 4px 4px 0px black;
+    }
+
+    button {
+      padding: 12px 18px;
+      border: 2px solid black;
+      background: #0066ff;
+      color: white;
+      font-family: "Satoshi", sans-serif;
+      font-size: 18px;
+      cursor: pointer;
+      transition: all 0.2s ease;
+    }
+
+    button:hover {
+      transform: scale(1.05) rotate(1deg);
+      box-shadow: 3px 3px 0px black;
+    }
+
+    .popup {
+      position: absolute;
+      bottom: 90px;
+      left: 0;
+      padding: 12px 16px;
+      border: 2px solid black;
+      background: #0066ff;
+      color: white;
+      font-size: 16px;
+      opacity: 0;
+      transform: translateY(10px);
+      transition: all 0.3s ease;
+      pointer-events: none;
+    }
+
+    .popup.show {
+      opacity: 1;
+      transform: translateY(0);
+    }
+  </style>
+</head>
+
+<body>
+
+<div id="container"></div>
+
+<div class="input-area">
+  <label>Escreva sua sugestão:</label>
+
+  <div class="input-row">
+    <input id="suggestionInput" type="text" placeholder="O que define São Paulo pra você?" />
+    <button id="submitBtn">Enviar</button>
+  </div>
+
+  <div id="popup" class="popup">Sugestão enviada ✓</div>
+</div>
+
+<script>
+const words = [
+  "Trânsito","Arranha-céus","Diversidade cultural","Pizza","Grafite","Metrô",
+  "Vida noturna","Parques","Avenida Paulista","Liberdade","Cultura urbana",
+  "Museus","Teatro","Restaurantes","Cafés","Startup","Negócios","Multidão",
+  "Correria","Chuva","Concreto","Arte de rua","Skate","Feiras","Eventos",
+  "Arquitetura","Centro","Periferia","Mistura","Caos","Energia","Trabalho",
+  "Mobilidade","História"
+];
+
+const container = document.getElementById("container");
+
+let dragging = null;
+let preview = null;
+let velocity = { x: 0, y: 0 };
+const boxes = [];
+
+// COLLISION
+function checkCollision(a, b) {
+  return !(
+    a.offsetLeft + a.offsetWidth < b.offsetLeft ||
+    a.offsetLeft > b.offsetLeft + b.offsetWidth ||
+    a.offsetTop + a.offsetHeight < b.offsetTop ||
+    a.offsetTop > b.offsetTop + b.offsetHeight
+  );
+}
+
+function pushBox(target, forceX, forceY) {
+  let vx = forceX;
+  let vy = forceY;
+
+  function animate() {
+    vx *= 0.9;
+    vy *= 0.9;
+
+    target.style.left = (target.offsetLeft + vx) + "px";
+    target.style.top = (target.offsetTop + vy) + "px";
+
+    if (Math.abs(vx) > 0.5 || Math.abs(vy) > 0.5) {
+      requestAnimationFrame(animate);
+    }
+  }
+
+  animate();
+}
+
+// EDGE BOUNCE
+function applyEdgeBounce(el, vx, vy) {
+  const maxX = window.innerWidth - el.offsetWidth;
+  const maxY = window.innerHeight - el.offsetHeight;
+
+  let x = el.offsetLeft;
+  let y = el.offsetTop;
+
+  if (x <= 0 || x >= maxX) vx *= -0.7;
+  if (y <= 0 || y >= maxY) vy *= -0.7;
+
+  x = Math.max(0, Math.min(maxX, x));
+  y = Math.max(0, Math.min(maxY, y));
+
+  el.style.left = x + "px";
+  el.style.top = y + "px";
+
+  return { vx, vy };
+}
+
+// COLOR
+function flashBlue(el) {
+  if (el.fadeAnimation) cancelAnimationFrame(el.fadeAnimation);
+
+  let progress = 1;
+
+  function animate() {
+    if (el.dataset.dragging === "true") {
+      el.style.borderColor = "#0066ff";
+      el.style.color = "#0066ff";
+      el.fadeAnimation = requestAnimationFrame(animate);
+      return;
+    }
+
+    progress -= 0.02;
+    if (progress < 0) progress = 0;
+
+    const color = `rgb(0, ${Math.round(102 * progress)}, ${Math.round(255 * progress)})`;
+    el.style.borderColor = color;
+    el.style.color = color;
+
+    if (progress > 0) {
+      el.fadeAnimation = requestAnimationFrame(animate);
+    } else {
+      el.style.borderColor = "black";
+      el.style.color = "black";
+    }
+  }
+
+  animate();
+}
+
+// CREATE BOXES
+words.forEach((text) => {
+  const div = document.createElement("div");
+  div.className = "box";
+  div.innerText = text;
+  div.style.visibility = "hidden";
+
+  container.appendChild(div);
+  boxes.push(div);
+
+  div.addEventListener("mousedown", (e) => {
+    dragging = {
+      el: div,
+      offsetX: e.clientX - div.offsetLeft,
+      offsetY: e.clientY - div.offsetTop,
+      lastX: e.clientX,
+      lastY: e.clientY,
+      collisions: 0,
+      hitBoxes: new Set()
+    };
+
+    div.dataset.dragging = "true";
+    flashBlue(div);
+
+    velocity = { x: 0, y: 0 };
+
+    preview = div.cloneNode(true);
+    preview.classList.add("drag-preview");
+    document.body.appendChild(preview);
+  });
+
+  div.addEventListener("click", () => {
+    flashBlue(div);
+  });
+});
+
+// LAYOUT
+function layoutBoxes() {
+  let x = 40;
+  let y = 40;
+  const gap = 16;
+  const maxWidth = window.innerWidth - 40;
+  const maxHeight = window.innerHeight / 2;
+
+  boxes.forEach((box) => {
+    const width = box.offsetWidth;
+
+    if (x + width > maxWidth) {
+      x = 40;
+      y += 90;
+    }
+
+    if (y > maxHeight) return;
+
+    box.style.left = x + "px";
+    box.style.top = y + "px";
+    box.style.visibility = "visible";
+
+    x += width + gap;
+  });
+}
+
+window.onload = layoutBoxes;
+
+// DRAG
+document.addEventListener("mousemove", (e) => {
+  if (!dragging) return;
+
+  let x = e.clientX - dragging.offsetX;
+  let y = e.clientY - dragging.offsetY;
+
+  x = Math.max(0, Math.min(window.innerWidth - dragging.el.offsetWidth, x));
+  y = Math.max(0, Math.min(window.innerHeight - dragging.el.offsetHeight, y));
+
+  velocity.x = e.clientX - dragging.lastX;
+  velocity.y = e.clientY - dragging.lastY;
+
+  dragging.lastX = e.clientX;
+  dragging.lastY = e.clientY;
+
+  dragging.el.style.left = x + "px";
+  dragging.el.style.top = y + "px";
+
+  preview.style.left = x + "px";
+  preview.style.top = y + "px";
+
+  if (dragging.collisions < 3) {
+    boxes.forEach((box) => {
+      if (box === dragging.el) return;
+
+      if (checkCollision(dragging.el, box) && !dragging.hitBoxes.has(box)) {
+        dragging.collisions++;
+        dragging.hitBoxes.add(box);
+        pushBox(box, velocity.x * 0.5, velocity.y * 0.5);
+      }
+    });
+  }
+});
+
+// RELEASE
+document.addEventListener("mouseup", () => {
+  if (!dragging) return;
+
+  const el = dragging.el;
+  let momentumX = velocity.x;
+  let momentumY = velocity.y;
+
+  el.dataset.dragging = "false";
+  flashBlue(el);
+
+  function animate() {
+    momentumX *= 0.95;
+    momentumY *= 0.95;
+
+    el.style.left = (el.offsetLeft + momentumX) + "px";
+    el.style.top = (el.offsetTop + momentumY) + "px";
+
+    const bounced = applyEdgeBounce(el, momentumX, momentumY);
+    momentumX = bounced.vx;
+    momentumY = bounced.vy;
+
+    if (Math.abs(momentumX) > 0.5 || Math.abs(momentumY) > 0.5) {
+      requestAnimationFrame(animate);
+    }
+  }
+
+  animate();
+
+  dragging = null;
+
+  if (preview) {
+    preview.remove();
+    preview = null;
+  }
+});
+
+// INPUT
+const input = document.getElementById("suggestionInput");
+const button = document.getElementById("submitBtn");
+const popup = document.getElementById("popup");
+
+function submitSuggestion() {
+  if (input.value.trim() === "") return;
+
+  input.value = "";
+  popup.classList.add("show");
+
+  setTimeout(() => popup.classList.remove("show"), 2000);
+}
+
+button.addEventListener("click", submitSuggestion);
+
+input.addEventListener("keydown", (e) => {
+  if (e.key === "Enter") submitSuggestion();
+});
+</script>
+
+</body>
+</html>
