@@ -55,7 +55,14 @@ export default function Home() {
         initialX={450}
         initialY={450}
         duration={20}
-      />
+      />        
+      <AnimatedStar
+        label="Loja"
+        href="/loja"
+        initialX={1000} // Ajuste para a direita
+        initialY={500}  // Ajuste para baixo
+/>
+      
     </main>
   );
 }

@@ -1,4 +1,8 @@
-<<<<<<< HEAD
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+/* O RESTO DO SEU CÓDIGO ABAIXO */
 @font-face {
   font-family: "Satoshi";
   src: url("/fonts/Satoshi-Regular.woff2") format("woff2");
@@ -7,6 +11,7 @@
   font-display: swap;
 }
 
+
 @font-face {
   font-family: "Satoshi";
   src: url("/fonts/Satoshi-Bold.woff2") format("woff2");
@@ -14,12 +19,15 @@
   font-style: normal;
   font-display: swap;
 }
-@import "tailwindcss";
+
+
+
 
 :root {
   --background: #ffffff;
   --foreground: #171717;
 }
+
 
 @theme inline {
   --color-background: var(--background);
@@ -28,6 +36,7 @@
   --font-mono: var(--font-geist-mono);
 }
 
+
 @media (prefers-color-scheme: dark) {
   :root {
     --background: #0a0a0a;
@@ -35,45 +44,32 @@
   }
 }
 
+
 body {
   font-family: "Satoshi", sans-serif;
   background-color: #ffffff;
   color: #0004FF;
 }
-=======
-@import "tailwindcss";
-
-:root {
-  --background: #f7f7f7;
-  --foreground: #191919;
+/* Estilo do Portão de Metal */
+.metal-gate {
+  background: repeating-linear-gradient(
+    #444 0px,
+    #444 40px,
+    #222 41px,
+    #222 45px
+  );
+  box-shadow: inset 0 0 100px rgba(0,0,0,0.5);
 }
 
-* {
-  box-sizing: border-box;
-  margin: 0;
-  padding: 0;
+
+.gate-handle {
+  background: #000;
+  color: #fff;
+  padding: 15px 30px;
+  border: 2px solid #555;
+  border-radius: 8px;
+  font-weight: bold;
+  letter-spacing: 2px;
+  box-shadow: 0 5px 15px rgba(0,0,0,0.5);
 }
 
-html,
-body {
-  width: 100%;
-  min-height: 100%;
-}
-
-body {
-  background-color: var(--background);
-  color: var(--foreground);
-  /* A font-family é aplicada via classe no layout.js */
-}
-
-a {
-  color: inherit;
-  text-decoration: none;
-}
-
-button,
-input,
-textarea {
-  font-family: inherit;
-}
->>>>>>> 3df572335a03f895b230dd8a4fd8fc9a842b6c3c
