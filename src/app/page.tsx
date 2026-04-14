@@ -11,15 +11,16 @@ export default function Home() {
 
       {/* Imagem Central */}
       <div className="absolute inset-0 flex items-center justify-center">
-        <Image
-          src="/images/mapa-sp.png"
-          alt="Mapa da cidade de São Paulo"
-          width={700}
-          height={700}
-          className="object-contain"
-          priority
-        />
-      </div>
+  <div className="relative w-[90%] h-[90%]">
+    <Image
+      src="/images/mapa-sp.png"
+      alt="Mapa da cidade de São Paulo"
+      fill
+      className="object-contain"
+      priority
+    />
+  </div>
+</div>
 
       {/* Estrelas Animadas */}
       <AnimatedStar
@@ -27,34 +28,35 @@ export default function Home() {
         href="/sobre-nos"
         initialX={120}
         initialY={150}
+        duration={70}
       />
       <AnimatedStar
         label="Mídia"
         href="/midia"
         initialX={300}
         initialY={100}
-        duration={22}
+        duration={55}
       />
       <AnimatedStar
         label="Jogo"
         href="/jogo"
         initialX={600}
         initialY={180}
-        duration={18}
+        duration={45}
       />
       <AnimatedStar
         label="Os Sentidos"
         href="/os-sentidos"
         initialX={850}
         initialY={300}
-        duration={24}
+        duration={65}
       />
       <AnimatedStar
         label="Comunidade"
         href="/comunidade"
         initialX={450}
         initialY={450}
-        duration={20}
+        duration={50}
       />
     </main>
   );
