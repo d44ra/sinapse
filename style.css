@@ -1,0 +1,80 @@
+body {
+  margin: 0;
+  font-family: 'Satoshi', Arial, sans-serif;
+  background-color: white;
+  position: relative;
+}
+
+/* HEADER */
+header {
+  display: flex;
+  justify-content: space-between;
+  align-items: flex-start;
+  padding: 40px 50px;
+}
+
+/* TÍTULO */
+header h1 {
+  margin: 0;
+  font-size: 48px;
+  letter-spacing: 0.5px;
+  line-height: 1.1;
+}
+
+/* MENU */
+.menu {
+  width: 30px;
+  cursor: pointer;
+}
+
+.menu span {
+  display: block;
+  height: 3px;
+  background: black;
+  margin: 5px 0;
+}
+
+/* GRID */
+.grid {
+  width: 95%;
+  margin: 10px auto;
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 10px 20px;
+}
+
+/* TEXTO */
+.texto {
+  padding: 20px;
+  width: 520px;
+
+  font-size: 14pt;
+  letter-spacing: 0px;
+  word-spacing: -1px;
+  line-height: 1.3;
+}
+
+/* POSIÇÃO */
+.esquerda {
+  justify-self: start;
+}
+
+.direita {
+  justify-self: end;
+}
+
+/* IMAGENS */
+.adesivo {
+  position: absolute;
+  pointer-events: none;
+  opacity: 1;
+  transition: opacity 3s ease; /* fade mais suave */
+}
+
+/* LOGO NO CANTO */
+.logo {
+  position: fixed;
+  bottom: 20px;
+  left: 20px;
+  width: 120px;
+}
