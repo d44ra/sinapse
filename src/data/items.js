@@ -1,4 +1,4 @@
-export const SCALE = 0.18;
+export const SCALE = 0.35;
 
 export const ITEMS = [
   {

@@ -265,7 +265,7 @@ export default function App() {
         padding: "2rem"
       }}>
         <div style={{
-          fontSize: "48px",
+          fontSize: "68px",
           lineHeight: "1.5",
           textAlign: "center",
           whiteSpace: "pre-wrap",
