@@ -4,23 +4,31 @@ import AnimatedStar from "@/components/AnimatedStar";
 export default function Home() {
   return (
     <main className="relative w-full h-screen bg-white overflow-hidden">
-      {/* Nome do Projeto */}
-      <h1 className="absolute top-6 right-8 text-2xl font-semibold text-[#0004FF]">
-        Sinapse
-      </h1>
+      
+      {/* Nome do Projeto + Slogan */}
+      <div className="absolute top-6 left-6 z-20 flex flex-col gap-4">
+        <h1 className="text-7xl font-semibold text-[#0004FF] leading-none">
+          Sinapse
+        </h1>
+
+        <p className="text-base text-[#0004FF] leading-tight max-w-xs">
+  explore o site como você explora<br />
+  a cidade de São Paulo
+</p>
+      </div>
 
       {/* Imagem Central */}
       <div className="absolute inset-0 flex items-center justify-center">
-  <div className="relative w-[90%] h-[90%]">
-    <Image
-      src="/images/mapa-sp.png"
-      alt="Mapa da cidade de São Paulo"
-      fill
-      className="object-contain"
-      priority
-    />
-  </div>
-</div>
+        <div className="relative w-[90%] h-[90%]">
+          <Image
+            src="/images/mapa-sp.png"
+            alt="Mapa da cidade de São Paulo"
+            fill
+            className="object-contain"
+            priority
+          />
+        </div>
+      </div>
 
       {/* Estrelas Animadas */}
       <AnimatedStar
@@ -52,12 +60,13 @@ export default function Home() {
         duration={65}
       />
       <AnimatedStar
-        label="Comunidade"
-        href="/comunidade"
+        label="Loja"
+        href="/loja"
         initialX={450}
         initialY={450}
         duration={50}
       />
+      
     </main>
   );
 }
