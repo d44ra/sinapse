@@ -26,11 +26,12 @@ const sections = [
 ];
 
 export default function SensoryPage() {
-  const [activeImages, setActiveImages] = useState({});
+  const [activeImages, setActiveImages] = useState<Record<string, boolean>>({});
 
-  const toggleImage = (sense) => {
+  const toggleImage = (sense: string) => {
     setActiveImages((prev) => {
-      const newState = { ...prev, [sense]: !prev[sense] };
+      const isActive = prev[sense] ?? false;
+      const newState = { ...prev, [sense]: !isActive };
 
       if (sense === "audicao") {
         const audio = new Audio("/images/audicao.mp3");
@@ -41,7 +42,7 @@ export default function SensoryPage() {
     });
   };
 
-  const getImageSrc = (sense) => {
+  const getImageSrc = (sense: string) => {
     return activeImages[sense]
       ? `/images/${sense}2.png`
       : `/images/${sense}.png`;
