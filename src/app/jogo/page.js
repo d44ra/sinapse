@@ -4,9 +4,11 @@ import { useEffect, useRef, useState } from "react";
 import Matter from "matter-js";
 import Image from "next/image";
 
+import FinalPoster from "./components/FinalPoster";
 import { PROMPTS } from "../../data/prompts";
 import { ITEMS, SCALE } from "../../data/items";
-import { randomItems, extractTextFromAnswers } from "../../lib/utils";
+// Importar shuffleArray
+import { randomItems, extractTextFromAnswers, shuffleArray } from "../../lib/utils";
 
 const DEFAULT_SLOT_W = 160;
 const DEFAULT_SLOT_H = 80;
@@ -18,6 +20,8 @@ export default function App() {
   
   const engineRef = useRef(null);
   const bodiesRef = useRef(new Map());
+  
+  const activeItemsRef = useRef(new Map());
 
   const [promptIndex, setPromptIndex] = useState(0);
   const [activeSlotId, setActiveSlotId] = useState(null);
@@ -26,14 +30,31 @@ export default function App() {
   const [physicsItems, setPhysicsItems] = useState([]);
   const [draggingItem, setDraggingItem] = useState(null);
 
-  const currentPrompt = PROMPTS[promptIndex];
-  const allSlots = currentPrompt.nodes.filter((n) => n.type === "slot");
+  const [isGameFinished, setIsGameFinished] = useState(false);
+  const [finalItems, setFinalItems] = useState([]);
+
+  // NOVO ESTADO: Guardar as frases embaralhadas
+  const [shuffledPrompts, setShuffledPrompts] = useState([]);
+
+  // Embaralhar as frases apenas uma vez na inicialização
+  useEffect(() => {
+    setShuffledPrompts(shuffleArray(PROMPTS));
+  }, []);
+
+  // Usar shuffledPrompts se disponível, senão usar PROMPTS (segurança)
+  const currentPromptsList = shuffledPrompts.length > 0 ? shuffledPrompts : PROMPTS;
+  const currentPrompt = currentPromptsList[promptIndex];
+  
+  const allSlots = currentPrompt ? currentPrompt.nodes.filter((n) => n.type === "slot") : [];
   const isPromptComplete = allSlots.length > 0 && allSlots.every((s) => answeredSlots[s.id]);
 
   /* =========================
      INIT PHYSICS ENGINE
   ========================= */
   useEffect(() => {
+    // Evitar renderizar Matter.js antes das frases estarem prontas
+    if (!currentPrompt) return;
+
     const engine = Matter.Engine.create({ gravity: { x: 0, y: 1.1 } });
     engineRef.current = engine;
 
@@ -50,11 +71,13 @@ export default function App() {
     const loop = () => {
       Matter.Engine.update(engine, 1000 / 60);
       const next = [];
-      bodiesRef.current.forEach((body, id) => {
-        const data = ITEMS.find((i) => i.id === id);
+      
+      bodiesRef.current.forEach((body, uniqueId) => {
+        const data = activeItemsRef.current.get(uniqueId);
         if (!data) return;
-        next.push({ id, x: body.position.x, y: body.position.y, angle: body.angle, ...data });
+        next.push({ ...data, x: body.position.x, y: body.position.y, angle: body.angle });
       });
+      
       setPhysicsItems(next);
       animationFrameId = requestAnimationFrame(loop);
     };
@@ -64,7 +87,7 @@ export default function App() {
       cancelAnimationFrame(animationFrameId);
       Matter.Engine.clear(engine);
     };
-  }, []);
+  }, [currentPrompt]); // Recriar física quando a frase mudar
 
   /* =========================
      ACTIONS
@@ -73,17 +96,24 @@ export default function App() {
     if (!engineRef.current) return;
     bodiesRef.current.forEach((b) => Matter.World.remove(engineRef.current.world, b));
     bodiesRef.current.clear();
+    activeItemsRef.current.clear();
     setPhysicsItems([]);
   };
 
-  const spawnItems = () => {
+  const spawnItems = (sentidoAtivo) => {
     const engine = engineRef.current;
     if (!engine) return;
     
     clearPhysics();
     
     const selected = randomItems(ITEMS, 5);
+
     selected.forEach((img, i) => {
+      const dynamicSrc = `/images/${img.id}-${sentidoAtivo}.png`;
+      const uniqueId = `${img.id}-${Date.now()}-${i}`;
+
+      activeItemsRef.current.set(uniqueId, { ...img, uniqueId, src: dynamicSrc });
+
       const scaledVertices = img.vertices.map(part => 
         part.map(v => ({ x: v.x * SCALE, y: v.y * SCALE }))
       );
@@ -98,25 +128,43 @@ export default function App() {
       if (!body) return;
 
       Matter.World.add(engine.world, body);
-      bodiesRef.current.set(img.id, body);
+      bodiesRef.current.set(uniqueId, body);
     });
   };
 
   const handleSlotClick = (slotId) => {
     if (answeredSlots[slotId]) return;
+    
     setActiveSlotId(slotId);
-    spawnItems();
+    
+    const slotNode = currentPrompt.nodes.find((n) => n.id === slotId);
+    spawnItems(slotNode.sentido);
+  };
+
+  const processRoundAndContinue = (isLastPrompt) => {
+    const roundItems = Object.keys(answeredSlots).map((slotId) => {
+      const answer = answeredSlots[slotId];
+      const baseItem = ITEMS.find((i) => i.id === answer.itemId);
+      return { ...baseItem, src: answer.src, uniqueId: `${baseItem.id}-${Date.now()}-${Math.random()}` };
+    });
+
+    setFinalItems((prev) => [...prev, ...roundItems]);
+
+    clearPhysics();
+
+    if (isLastPrompt) {
+      setIsGameFinished(true);
+    } else {
+      setPromptIndex((prev) => prev + 1);
+      setAnsweredSlots({});
+      setActiveSlotId(null);
+    }
   };
 
   const nextPrompt = () => {
-    if (promptIndex + 1 < PROMPTS.length) {
-      setPromptIndex((prev) => prev + 1);
-    } else {
-      setPromptIndex(0);
-    }
-    setAnsweredSlots({});
-    setActiveSlotId(null);
-    clearPhysics();
+    // Usar currentPromptsList
+    const isLastPrompt = promptIndex + 1 >= currentPromptsList.length;
+    processRoundAndContinue(isLastPrompt);
   };
 
   const sharePrompt = async () => {
@@ -144,11 +192,15 @@ export default function App() {
       
       if (!found) return;
 
-      const item = ITEMS.find((i) => bodiesRef.current.get(i.id) === found);
+      const bodyEntry = Array.from(bodiesRef.current.entries()).find(([uid, b]) => b === found);
+      if (!bodyEntry) return;
+
+      const [uniqueId] = bodyEntry;
+      const item = activeItemsRef.current.get(uniqueId);
       if (!item) return;
 
       Matter.World.remove(engineRef.current.world, found);
-      bodiesRef.current.delete(item.id);
+      bodiesRef.current.delete(uniqueId);
 
       setDraggingItem({
         ...item,
@@ -189,7 +241,10 @@ export default function App() {
       }
 
       if (droppedInActiveSlot && activeSlotId) {
-        setAnsweredSlots((prev) => ({ ...prev, [activeSlotId]: draggingItem.id }));
+        setAnsweredSlots((prev) => ({ 
+          ...prev, 
+          [activeSlotId]: { itemId: draggingItem.id, src: draggingItem.src } 
+        }));
         setActiveSlotId(null);
         clearPhysics();
       } else {
@@ -206,7 +261,7 @@ export default function App() {
           );
           if (body) {
             Matter.World.add(engine.world, body);
-            bodiesRef.current.set(draggingItem.id, body);
+            bodiesRef.current.set(draggingItem.uniqueId, body);
           }
         }
       }
@@ -228,6 +283,15 @@ export default function App() {
   /* =========================
      RENDER
   ========================= */
+  if (isGameFinished) {
+    return <FinalPoster selectedItems={finalItems} />;
+  }
+
+  // Segurança contra carregamento assíncrono das frases
+  if (!currentPrompt) {
+    return <div style={{ display: "flex", height: "100vh", width: "100vw", justifyContent: "center", alignItems: "center", fontSize: "2rem", color: "#000", backgroundColor: "#f9f9f9" }}>Carregando jogo...</div>;
+  }
+
   return (
     <main
       ref={containerRef}
@@ -269,6 +333,7 @@ export default function App() {
           lineHeight: "1.5",
           textAlign: "center",
           whiteSpace: "pre-wrap",
+          color: "#000",
         }}>
           {currentPrompt.nodes.map((node, i) => {
             if (node.type === "text") {
@@ -276,21 +341,21 @@ export default function App() {
             }
 
             if (node.type === "slot") {
-              const answerId = answeredSlots[node.id];
+              const answer = answeredSlots[node.id];
               const isActive = activeSlotId === node.id;
 
-              if (answerId) {
-                const item = ITEMS.find((it) => it.id === answerId);
-                if (!item) return null;
+              if (answer) {
+                const itemBase = ITEMS.find((it) => it.id === answer.itemId);
+                if (!itemBase) return null;
                 return (
                   <img
                     key={node.id}
-                    src={item.src}
-                    alt={item.label}
+                    src={answer.src}
+                    alt={itemBase.label}
                     style={{
                       display: "inline-block",
-                      width: item.w * SCALE,
-                      height: item.h * SCALE,
+                      width: itemBase.w * SCALE,
+                      height: itemBase.h * SCALE,
                       verticalAlign: "middle",
                       margin: "0 8px",
                       pointerEvents: "none"
@@ -345,13 +410,13 @@ export default function App() {
           <div style={{ marginTop: "40px", display: "flex", gap: "20px" }}>
             <button 
               onClick={nextPrompt}
-              style={{ padding: "16px 32px", fontSize: "20px", cursor: "pointer" }}
+              style={{ padding: "16px 32px", fontSize: "20px", cursor: "pointer", border: "1px solid black", background: "white", borderRadius: "8px", color: "#000" }}
             >
-              Próxima frase
+              {promptIndex + 1 >= currentPromptsList.length ? "Finalizar" : "Próxima frase"}
             </button>
             <button 
               onClick={sharePrompt}
-              style={{ padding: "16px 32px", fontSize: "20px", cursor: "pointer" }}
+              style={{ padding: "16px 32px", fontSize: "20px", cursor: "pointer", border: "1px solid black", background: "white", borderRadius: "8px", color: "#000" }}
             >
               Compartilhar
             </button>
@@ -361,7 +426,7 @@ export default function App() {
 
       {physicsItems.map((item) => (
         <div
-          key={item.id}
+          key={item.uniqueId}
           style={{
             position: "absolute",
             left: item.x - (item.w * SCALE) / 2,

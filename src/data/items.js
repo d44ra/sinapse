@@ -1,10 +1,9 @@
-export const SCALE = 0.35;
+export const SCALE = 0.18;
 
 export const ITEMS = [
   {
     id: "pastel",
     label: "pastel",
-    src: "/images/pastel.png",
     w: 520,
     h: 520,
     svgPath: "M0,0 L520,0 L520,520 L0,520 Z", // TODO: Substituir por silhueta real
@@ -13,7 +12,6 @@ export const ITEMS = [
   {
     id: "moeda",
     label: "moeda",
-    src: "/images/moeda.png",
     w: 360,
     h: 360,
     svgPath: "M0,0 L360,0 L360,360 L0,360 Z", // TODO: Substituir por silhueta real
@@ -22,7 +20,6 @@ export const ITEMS = [
   {
     id: "pombo",
     label: "pombo",
-    src: "/images/pombo.png",
     w: 420,
     h: 360,
     svgPath: "M0,0 L420,0 L420,360 L0,360 Z", // TODO: Substituir por silhueta real
@@ -31,7 +28,6 @@ export const ITEMS = [
   {
     id: "carro",
     label: "carro",
-    src: "/images/carro.png",
     w: 560,
     h: 320,
     svgPath: "M0,0 L560,0 L560,320 L0,320 Z", // TODO: Substituir por silhueta real
@@ -40,7 +36,6 @@ export const ITEMS = [
   {
     id: "gasolina",
     label: "gasolina",
-    src: "/images/gasolina.png",
     w: 420,
     h: 420,
     svgPath: "M0,0 L420,0 L420,420 L0,420 Z", // TODO: Substituir por silhueta real
