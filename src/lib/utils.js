@@ -25,5 +25,17 @@ export function extractTextFromAnswers(nodes, answers, items) {
       }
       return "";
     })
-    .join("");
-}
+      .join("");
+  }
+  export function parsePolygonString(polygonStr) {
+    const match = polygonStr.match(/polygon\((.*)\)/);
+    if (!match) return [[{ x: 0, y: 0 }, { x: 100, y: 0 }, { x: 100, y: 100 }, { x: 0, y: 100 }]]; // Fallback de erro
+    
+    const points = match[1].split(',');
+    const vertices = points.map(p => {
+      const coords = p.trim().split(/\s+/);
+      return { x: parseFloat(coords[0]), y: parseFloat(coords[1]) };
+    });
+    
+    return [vertices];
+  }

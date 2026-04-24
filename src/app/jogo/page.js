@@ -109,7 +109,7 @@ export default function App() {
     const selected = randomItems(ITEMS, 5);
 
     selected.forEach((img, i) => {
-      const dynamicSrc = `/images/${img.id}-${sentidoAtivo}.png`;
+      const dynamicSrc = `/images/${img.id}_${sentidoAtivo}.png`;
       const uniqueId = `${img.id}-${Date.now()}-${i}`;
 
       activeItemsRef.current.set(uniqueId, { ...img, uniqueId, src: dynamicSrc });

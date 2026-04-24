@@ -1,7 +1,6 @@
 import localFont from "next/font/local";
 import "./globals.css";
 
-// A configuração abaixo "chama" os arquivos e cria a integração com o Next.js
 const satoshi = localFont({
   src: [
     {
