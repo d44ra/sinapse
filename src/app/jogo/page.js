@@ -2,6 +2,8 @@
 
 import { useEffect, useRef, useState } from "react";
 import Matter from "matter-js";
+import decomp from 'poly-decomp';
+Matter.Common.setDecomp(decomp);
 import Image from "next/image";
 
 import FinalPoster from "./components/FinalPoster";
@@ -61,7 +63,7 @@ export default function App() {
     const width = window.innerWidth;
     const height = window.innerHeight;
 
-    const floor = Matter.Bodies.rectangle(width / 2, height + 60, width, 120, { isStatic: true });
+    const floor = Matter.Bodies.rectangle(width / 2, height - 10, width, 120, { isStatic: true });
     const left = Matter.Bodies.rectangle(-60, height / 2, 120, height, { isStatic: true });
     const right = Matter.Bodies.rectangle(width + 60, height / 2, 120, height, { isStatic: true });
 
@@ -109,7 +111,7 @@ export default function App() {
     const selected = randomItems(ITEMS, 5);
 
     selected.forEach((img, i) => {
-      const dynamicSrc = `/images/${img.id}_${sentidoAtivo}.png`;
+      const dynamicSrc = `/images/jogo/${img.id}_${sentidoAtivo}.png`;
       const uniqueId = `${img.id}-${Date.now()}-${i}`;
 
       activeItemsRef.current.set(uniqueId, { ...img, uniqueId, src: dynamicSrc });
@@ -333,7 +335,8 @@ export default function App() {
           lineHeight: "1.5",
           textAlign: "center",
           whiteSpace: "pre-wrap",
-          color: "#000",
+          color: "#191919",
+          fontWeight: "bold"
         }}>
           {currentPrompt.nodes.map((node, i) => {
             if (node.type === "text") {
@@ -395,7 +398,7 @@ export default function App() {
                       d={pathStr}
                       className="slot-path"
                       style={{
-                        stroke: isActive ? "#000" : "#ccc",
+                        stroke: isActive ? "#2f00ffff" : "#ccc",
                         animationPlayState: isActive ? "running" : "paused"
                       }}
                     />
