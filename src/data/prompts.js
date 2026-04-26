@@ -84,7 +84,7 @@ export const PROMPTS = [
     nodes: [
       { type: "text", content: "O gosto de São Paulo é " },
       { type: "slot", id: "s1", sentido: "paladar" },
-      { type: "text", content: " e o parece " },
+      { type: "text", content: " e parece com " },
       { type: "slot", id: "s2", sentido: "visao" },
       { type: "text", content: "." },
     ],

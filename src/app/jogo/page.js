@@ -331,8 +331,9 @@ export default function App() {
         padding: "2rem"
       }}>
         <div style={{
-          fontSize: "68px",
-          lineHeight: "1.5",
+          fontSize: "75px",
+          maxWidth: "80vw",
+          lineHeight: "1.15",
           textAlign: "center",
           whiteSpace: "pre-wrap",
           color: "#191919",
@@ -350,20 +351,37 @@ export default function App() {
               if (answer) {
                 const itemBase = ITEMS.find((it) => it.id === answer.itemId);
                 if (!itemBase) return null;
+
+                const totalW = itemBase.w * SCALE;
+                const totalH = itemBase.h * SCALE;
+
                 return (
-                  <img
+                  <span
                     key={node.id}
-                    src={answer.src}
-                    alt={itemBase.label}
                     style={{
                       display: "inline-block",
-                      width: itemBase.w * SCALE,
-                      height: itemBase.h * SCALE,
+                      width: totalW,
+                      height: 80, // Esta é a altura fixa que dita o espaço entre as linhas. Ajuste se precisar.
+                      position: "relative",
                       verticalAlign: "middle",
                       margin: "0 8px",
-                      pointerEvents: "none"
                     }}
-                  />
+                  >
+                    <img
+                      src={answer.src}
+                      alt={itemBase.label}
+                      style={{
+                        position: "absolute",
+                        top: "50%",
+                        left: "50%",
+                        transform: "translate(-50%, -50%)",
+                        width: totalW,
+                        height: totalH,
+                        objectFit: "contain",
+                        pointerEvents: "none"
+                      }}
+                    />
+                  </span>
                 );
               }
 
@@ -398,7 +416,7 @@ export default function App() {
                       d={pathStr}
                       className="slot-path"
                       style={{
-                        stroke: isActive ? "#2f00ffff" : "#ccc",
+                        stroke: isActive ? "#001bff" : "#ccc",
                         animationPlayState: isActive ? "running" : "paused"
                       }}
                     />
@@ -413,15 +431,33 @@ export default function App() {
           <div style={{ marginTop: "40px", display: "flex", gap: "20px" }}>
             <button 
               onClick={nextPrompt}
-              style={{ padding: "16px 32px", fontSize: "20px", cursor: "pointer", border: "1px solid black", background: "white", borderRadius: "8px", color: "#000" }}
+              title={promptIndex + 1 >= currentPromptsList.length ? "Finalizar" : "Próxima frase"}
+              style={{ padding: "8px", cursor: "pointer", border: "none", background: "none", color: "#001bff", display: "flex", alignItems: "center", justifyContent: "center" }}
             >
-              {promptIndex + 1 >= currentPromptsList.length ? "Finalizar" : "Próxima frase"}
+              {promptIndex + 1 >= currentPromptsList.length ? (
+                // Ícone de Finalizar (Check)
+                <svg width="48" height="48" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                  <polyline points="20 6 9 17 4 12"></polyline>
+                </svg>
+              ) : (
+                // Ícone de Próximo (Seta para a direita)
+                <svg width="48" height="48" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                  <line x1="5" y1="12" x2="19" y2="12"></line>
+                  <polyline points="12 5 19 12 12 19"></polyline>
+                </svg>
+              )}
             </button>
             <button 
               onClick={sharePrompt}
-              style={{ padding: "16px 32px", fontSize: "20px", cursor: "pointer", border: "1px solid black", background: "white", borderRadius: "8px", color: "#000" }}
+              title="Compartilhar"
+              style={{ padding: "8px", cursor: "pointer", border: "none", background: "none", color: "#001bff", display: "flex", alignItems: "center", justifyContent: "center" }}
             >
-              Compartilhar
+              {/* Ícone de Compartilhar */}
+              <svg width="48" height="48" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                <path d="M4 12v8a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2v-8"></path>
+                <polyline points="16 6 12 2 8 6"></polyline>
+                <line x1="12" y1="2" x2="12" y2="15"></line>
+              </svg>
             </button>
           </div>
         )}
