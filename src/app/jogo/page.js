@@ -5,11 +5,11 @@ import Matter from "matter-js";
 import decomp from 'poly-decomp';
 Matter.Common.setDecomp(decomp);
 import Image from "next/image";
+import html2canvas from 'html2canvas';
 
 import FinalPoster from "./components/FinalPoster";
 import { PROMPTS } from "../../data/prompts";
 import { ITEMS, SCALE } from "../../data/items";
-// Importar shuffleArray
 import { randomItems, extractTextFromAnswers, shuffleArray } from "../../lib/utils";
 
 const DEFAULT_SLOT_W = 160;
@@ -35,15 +35,13 @@ export default function App() {
   const [isGameFinished, setIsGameFinished] = useState(false);
   const [finalItems, setFinalItems] = useState([]);
 
-  // NOVO ESTADO: Guardar as frases embaralhadas
   const [shuffledPrompts, setShuffledPrompts] = useState([]);
+  const [itemPool, setItemPool] = useState([]);
 
-  // Embaralhar as frases apenas uma vez na inicialização
   useEffect(() => {
     setShuffledPrompts(shuffleArray(PROMPTS));
   }, []);
 
-  // Usar shuffledPrompts se disponível, senão usar PROMPTS (segurança)
   const currentPromptsList = shuffledPrompts.length > 0 ? shuffledPrompts : PROMPTS;
   const currentPrompt = currentPromptsList[promptIndex];
   
@@ -54,7 +52,6 @@ export default function App() {
      INIT PHYSICS ENGINE
   ========================= */
   useEffect(() => {
-    // Evitar renderizar Matter.js antes das frases estarem prontas
     if (!currentPrompt) return;
 
     const engine = Matter.Engine.create({ gravity: { x: 0, y: 1.1 } });
@@ -89,7 +86,7 @@ export default function App() {
       cancelAnimationFrame(animationFrameId);
       Matter.Engine.clear(engine);
     };
-  }, [currentPrompt]); // Recriar física quando a frase mudar
+  }, [currentPrompt]);
 
   /* =========================
      ACTIONS
@@ -108,29 +105,54 @@ export default function App() {
     
     clearPhysics();
     
-    const selected = randomItems(ITEMS, 5);
+    let currentPool = [...itemPool];
+    if (currentPool.length < 5) {
+      currentPool = shuffleArray([...ITEMS]);
+    }
+    
+    const selected = currentPool.splice(0, 5);
+    setItemPool(currentPool);
 
     selected.forEach((img, i) => {
       const dynamicSrc = `/images/jogo/${img.id}_${sentidoAtivo}.png`;
       const uniqueId = `${img.id}-${Date.now()}-${i}`;
 
-      activeItemsRef.current.set(uniqueId, { ...img, uniqueId, src: dynamicSrc });
+      const targetSize = 180;
+      const autoScale = targetSize / Math.max(img.w, img.h);
+
+      activeItemsRef.current.set(uniqueId, { 
+        ...img, 
+        uniqueId, 
+        src: dynamicSrc,
+        dynamicScale: autoScale
+      });
 
       const scaledVertices = img.vertices.map(part => 
-        part.map(v => ({ x: v.x * SCALE, y: v.y * SCALE }))
+        part.map(v => ({ x: v.x * autoScale, y: v.y * autoScale }))
       );
 
+      const startX = window.innerWidth / 2 + (Math.random() - 0.5) * 150;
+      const startY = -200 - i * 100;
+
       const body = Matter.Bodies.fromVertices(
-        window.innerWidth / 2 + (Math.random() - 0.5) * 150,
-        -200 - i * 100,
+        startX,
+        startY,
         scaledVertices,
         { restitution: 0.05, friction: 0.9, frictionAir: 0.04 }
       );
 
-      if (!body) return;
-
-      Matter.World.add(engine.world, body);
-      bodiesRef.current.set(uniqueId, body);
+      if (!body || body.parts.length <= 1) {
+        console.warn(`Silhueta falhou para: ${img.id}. Usando box de fallback.`);
+        const fallbackBody = Matter.Bodies.rectangle(
+          startX, startY, img.w * autoScale, img.h * autoScale,
+          { restitution: 0.05, friction: 0.9, frictionAir: 0.04 }
+        );
+        Matter.World.add(engine.world, fallbackBody);
+        bodiesRef.current.set(uniqueId, fallbackBody);
+      } else {
+        Matter.World.add(engine.world, body);
+        bodiesRef.current.set(uniqueId, body);
+      }
     });
   };
 
@@ -164,22 +186,46 @@ export default function App() {
   };
 
   const nextPrompt = () => {
-    // Usar currentPromptsList
     const isLastPrompt = promptIndex + 1 >= currentPromptsList.length;
     processRoundAndContinue(isLastPrompt);
   };
 
   const sharePrompt = async () => {
-    const text = extractTextFromAnswers(currentPrompt.nodes, answeredSlots, ITEMS);
-    if (navigator.share) {
-      try {
-        await navigator.share({ title: "Minha Frase", text });
-      } catch (e) {
-        console.error("Erro ao compartilhar", e);
-      }
-    } else {
-      navigator.clipboard.writeText(text);
-      alert("Texto copiado para a área de transferência!");
+    if (!containerRef.current) return;
+
+    try {
+      const canvas = await html2canvas(containerRef.current, {
+        useCORS: true,
+        backgroundColor: "#f9f9f9",
+        scale: 2 
+      });
+
+      canvas.toBlob(async (blob) => {
+        if (!blob) return;
+
+        const file = new File([blob], "minha-frase.jpg", { type: "image/jpeg" });
+
+        if (navigator.share && navigator.canShare && navigator.canShare({ files: [file] })) {
+          try {
+            await navigator.share({
+              title: "Minha Frase",
+              files: [file]
+            });
+          } catch (e) {
+            console.error("Erro ao compartilhar", e);
+          }
+        } else {
+          const url = URL.createObjectURL(blob);
+          const a = document.createElement("a");
+          a.href = url;
+          a.download = "minha-frase.jpg";
+          a.click();
+          URL.revokeObjectURL(url);
+        }
+      }, "image/jpeg", 0.9);
+
+    } catch (error) {
+      console.error("Erro ao gerar a imagem:", error);
     }
   };
 
@@ -204,10 +250,12 @@ export default function App() {
       Matter.World.remove(engineRef.current.world, found);
       bodiesRef.current.delete(uniqueId);
 
+      const itemScale = item.dynamicScale || SCALE;
+
       setDraggingItem({
         ...item,
-        offsetX: (item.w * SCALE) / 2,
-        offsetY: (item.h * SCALE) / 2,
+        offsetX: (item.w * itemScale) / 2,
+        offsetY: (item.h * itemScale) / 2,
         x: e.clientX,
         y: e.clientY,
       });
@@ -245,23 +293,37 @@ export default function App() {
       if (droppedInActiveSlot && activeSlotId) {
         setAnsweredSlots((prev) => ({ 
           ...prev, 
-          [activeSlotId]: { itemId: draggingItem.id, src: draggingItem.src } 
+          [activeSlotId]: { 
+            itemId: draggingItem.id, 
+            src: draggingItem.src,
+            scale: draggingItem.dynamicScale 
+          } 
         }));
         setActiveSlotId(null);
         clearPhysics();
       } else {
         const engine = engineRef.current;
         if (engine) {
+          const currentScale = draggingItem.dynamicScale || SCALE;
           const scaledVertices = draggingItem.vertices.map(part => 
-            part.map(v => ({ x: v.x * SCALE, y: v.y * SCALE }))
+            part.map(v => ({ x: v.x * currentScale, y: v.y * currentScale }))
           );
+          
           const body = Matter.Bodies.fromVertices(
             e.clientX,
             e.clientY,
             scaledVertices,
             { restitution: 0.05, friction: 0.9, frictionAir: 0.04 }
           );
-          if (body) {
+
+          if (!body || body.parts.length <= 1) {
+            const fallbackBody = Matter.Bodies.rectangle(
+              e.clientX, e.clientY, draggingItem.w * currentScale, draggingItem.h * currentScale,
+              { restitution: 0.05, friction: 0.9, frictionAir: 0.04 }
+            );
+            Matter.World.add(engine.world, fallbackBody);
+            bodiesRef.current.set(draggingItem.uniqueId, fallbackBody);
+          } else {
             Matter.World.add(engine.world, body);
             bodiesRef.current.set(draggingItem.uniqueId, body);
           }
@@ -289,7 +351,6 @@ export default function App() {
     return <FinalPoster selectedItems={finalItems} />;
   }
 
-  // Segurança contra carregamento assíncrono das frases
   if (!currentPrompt) {
     return <div style={{ display: "flex", height: "100vh", width: "100vw", justifyContent: "center", alignItems: "center", fontSize: "2rem", color: "#000", backgroundColor: "#f9f9f9" }}>Carregando jogo...</div>;
   }
@@ -352,8 +413,9 @@ export default function App() {
                 const itemBase = ITEMS.find((it) => it.id === answer.itemId);
                 if (!itemBase) return null;
 
-                const totalW = itemBase.w * SCALE;
-                const totalH = itemBase.h * SCALE;
+                const currentScale = answer.scale || SCALE;
+                const totalW = itemBase.w * currentScale;
+                const totalH = itemBase.h * currentScale;
 
                 return (
                   <span
@@ -361,7 +423,7 @@ export default function App() {
                     style={{
                       display: "inline-block",
                       width: totalW,
-                      height: 80, // Esta é a altura fixa que dita o espaço entre as linhas. Ajuste se precisar.
+                      height: 80,
                       position: "relative",
                       verticalAlign: "middle",
                       margin: "0 8px",
@@ -385,9 +447,11 @@ export default function App() {
                 );
               }
 
-              const w = draggingItem && isActive ? draggingItem.w * SCALE : DEFAULT_SLOT_W;
-              const h = draggingItem && isActive ? draggingItem.h * SCALE : DEFAULT_SLOT_H;
+              const activeScale = draggingItem && isActive ? (draggingItem.dynamicScale || SCALE) : SCALE;
+              const svgW = draggingItem && isActive ? draggingItem.w * activeScale : DEFAULT_SLOT_W;
+              const svgH = draggingItem && isActive ? draggingItem.h * activeScale : DEFAULT_SLOT_H;
               const pathStr = draggingItem && isActive ? draggingItem.svgPath : DEFAULT_SLOT_PATH;
+              const dropZoneW = Math.max(svgW, 80);
 
               return (
                 <span
@@ -398,28 +462,36 @@ export default function App() {
                   onClick={() => handleSlotClick(node.id)}
                   style={{
                     display: "inline-block",
-                    width: w,
-                    height: h,
+                    width: dropZoneW,
+                    height: 80,
+                    position: "relative",
                     verticalAlign: "middle",
                     margin: "0 8px",
                     cursor: isActive ? "default" : "pointer",
-                    transition: "width 0.2s, height 0.2s"
                   }}
                 >
                   <svg 
-                    width={w} 
-                    height={h} 
+                    width={svgW} 
+                    height={svgH} 
                     viewBox={draggingItem && isActive ? `0 0 ${draggingItem.w} ${draggingItem.h}` : `0 0 ${DEFAULT_SLOT_W} ${DEFAULT_SLOT_H}`}
-                    style={{ overflow: "visible" }}
+                    style={{ 
+                      overflow: "visible",
+                      position: "absolute",
+                      top: "50%",
+                      left: "50%",
+                      transform: "translate(-50%, -50%)"
+                    }}
                   >
-                    <path
-                      d={pathStr}
-                      className="slot-path"
-                      style={{
-                        stroke: isActive ? "#001bff" : "#ccc",
-                        animationPlayState: isActive ? "running" : "paused"
-                      }}
-                    />
+                    {pathStr && (
+                      <path
+                        d={pathStr}
+                        className="slot-path"
+                        style={{
+                          stroke: isActive ? "#001bff" : "#ccc",
+                          animationPlayState: isActive ? "running" : "paused"
+                        }}
+                      />
+                    )}
                   </svg>
                 </span>
               );
@@ -435,12 +507,10 @@ export default function App() {
               style={{ padding: "8px", cursor: "pointer", border: "none", background: "none", color: "#001bff", display: "flex", alignItems: "center", justifyContent: "center" }}
             >
               {promptIndex + 1 >= currentPromptsList.length ? (
-                // Ícone de Finalizar (Check)
                 <svg width="48" height="48" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
                   <polyline points="20 6 9 17 4 12"></polyline>
                 </svg>
               ) : (
-                // Ícone de Próximo (Seta para a direita)
                 <svg width="48" height="48" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
                   <line x1="5" y1="12" x2="19" y2="12"></line>
                   <polyline points="12 5 19 12 12 19"></polyline>
@@ -452,7 +522,6 @@ export default function App() {
               title="Compartilhar"
               style={{ padding: "8px", cursor: "pointer", border: "none", background: "none", color: "#001bff", display: "flex", alignItems: "center", justifyContent: "center" }}
             >
-              {/* Ícone de Compartilhar */}
               <svg width="48" height="48" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
                 <path d="M4 12v8a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2v-8"></path>
                 <polyline points="16 6 12 2 8 6"></polyline>
@@ -468,13 +537,19 @@ export default function App() {
           key={item.uniqueId}
           style={{
             position: "absolute",
-            left: item.x - (item.w * SCALE) / 2,
-            top: item.y - (item.h * SCALE) / 2,
+            left: item.x - (item.w * (item.dynamicScale || SCALE)) / 2,
+            top: item.y - (item.h * (item.dynamicScale || SCALE)) / 2,
             transform: `rotate(${item.angle}rad)`,
             pointerEvents: "none",
           }}
         >
-          <Image src={item.src} alt="" width={item.w * SCALE} height={item.h * SCALE} draggable={false} />
+          <Image 
+            src={item.src} 
+            alt="" 
+            width={item.w * (item.dynamicScale || SCALE)} 
+            height={item.h * (item.dynamicScale || SCALE)} 
+            draggable={false} 
+          />
         </div>
       ))}
 
@@ -488,7 +563,13 @@ export default function App() {
             zIndex: 100,
           }}
         >
-          <Image src={draggingItem.src} alt="" width={draggingItem.w * SCALE} height={draggingItem.h * SCALE} draggable={false} />
+          <Image 
+            src={draggingItem.src} 
+            alt="" 
+            width={draggingItem.w * (draggingItem.dynamicScale || SCALE)} 
+            height={draggingItem.h * (draggingItem.dynamicScale || SCALE)} 
+            draggable={false} 
+          />
         </div>
       )}
     </main>
