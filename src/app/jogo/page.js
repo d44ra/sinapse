@@ -2,11 +2,15 @@
 
 import { useEffect, useRef, useState } from "react";
 import Matter from "matter-js";
+import decomp from 'poly-decomp';
+Matter.Common.setDecomp(decomp);
 import Image from "next/image";
+import html2canvas from 'html2canvas';
 
+import FinalPoster from "./components/FinalPoster";
 import { PROMPTS } from "../../data/prompts";
 import { ITEMS, SCALE } from "../../data/items";
-import { randomItems, extractTextFromAnswers } from "../../lib/utils";
+import { randomItems, extractTextFromAnswers, shuffleArray } from "../../lib/utils";
 
 const DEFAULT_SLOT_W = 160;
 const DEFAULT_SLOT_H = 80;
@@ -18,6 +22,8 @@ export default function App() {
   
   const engineRef = useRef(null);
   const bodiesRef = useRef(new Map());
+  
+  const activeItemsRef = useRef(new Map());
 
   const [promptIndex, setPromptIndex] = useState(0);
   const [activeSlotId, setActiveSlotId] = useState(null);
@@ -26,21 +32,35 @@ export default function App() {
   const [physicsItems, setPhysicsItems] = useState([]);
   const [draggingItem, setDraggingItem] = useState(null);
 
-  const currentPrompt = PROMPTS[promptIndex];
-  const allSlots = currentPrompt.nodes.filter((n) => n.type === "slot");
+  const [isGameFinished, setIsGameFinished] = useState(false);
+  const [finalItems, setFinalItems] = useState([]);
+
+  const [shuffledPrompts, setShuffledPrompts] = useState([]);
+  const [itemPool, setItemPool] = useState([]);
+
+  useEffect(() => {
+    setShuffledPrompts(shuffleArray(PROMPTS));
+  }, []);
+
+  const currentPromptsList = shuffledPrompts.length > 0 ? shuffledPrompts : PROMPTS;
+  const currentPrompt = currentPromptsList[promptIndex];
+  
+  const allSlots = currentPrompt ? currentPrompt.nodes.filter((n) => n.type === "slot") : [];
   const isPromptComplete = allSlots.length > 0 && allSlots.every((s) => answeredSlots[s.id]);
 
   /* =========================
-     INIT PHYSICS ENGINE
+      INIT PHYSICS ENGINE
   ========================= */
   useEffect(() => {
+    if (!currentPrompt) return;
+
     const engine = Matter.Engine.create({ gravity: { x: 0, y: 1.1 } });
     engineRef.current = engine;
 
     const width = window.innerWidth;
     const height = window.innerHeight;
 
-    const floor = Matter.Bodies.rectangle(width / 2, height + 60, width, 120, { isStatic: true });
+    const floor = Matter.Bodies.rectangle(width / 2, height - 10, width, 120, { isStatic: true });
     const left = Matter.Bodies.rectangle(-60, height / 2, 120, height, { isStatic: true });
     const right = Matter.Bodies.rectangle(width + 60, height / 2, 120, height, { isStatic: true });
 
@@ -50,11 +70,13 @@ export default function App() {
     const loop = () => {
       Matter.Engine.update(engine, 1000 / 60);
       const next = [];
-      bodiesRef.current.forEach((body, id) => {
-        const data = ITEMS.find((i) => i.id === id);
+      
+      bodiesRef.current.forEach((body, uniqueId) => {
+        const data = activeItemsRef.current.get(uniqueId);
         if (!data) return;
-        next.push({ id, x: body.position.x, y: body.position.y, angle: body.angle, ...data });
+        next.push({ ...data, x: body.position.x, y: body.position.y, angle: body.angle });
       });
+      
       setPhysicsItems(next);
       animationFrameId = requestAnimationFrame(loop);
     };
@@ -64,77 +86,160 @@ export default function App() {
       cancelAnimationFrame(animationFrameId);
       Matter.Engine.clear(engine);
     };
-  }, []);
+  }, [currentPrompt]);
 
   /* =========================
-     ACTIONS
+      ACTIONS
   ========================= */
   const clearPhysics = () => {
     if (!engineRef.current) return;
     bodiesRef.current.forEach((b) => Matter.World.remove(engineRef.current.world, b));
     bodiesRef.current.clear();
+    activeItemsRef.current.clear();
     setPhysicsItems([]);
   };
 
-  const spawnItems = () => {
-    const engine = engineRef.current;
-    if (!engine) return;
-    
-    clearPhysics();
-    
-    const selected = randomItems(ITEMS, 5);
-    selected.forEach((img, i) => {
-      const scaledVertices = img.vertices.map(part => 
-        part.map(v => ({ x: v.x * SCALE, y: v.y * SCALE }))
-      );
+  const spawnItems = (sentidoAtivo) => {
+  const engine = engineRef.current;
+  if (!engine) return;
 
-      const body = Matter.Bodies.fromVertices(
-        window.innerWidth / 2 + (Math.random() - 0.5) * 150,
-        -200 - i * 100,
-        scaledVertices,
-        { restitution: 0.05, friction: 0.9, frictionAir: 0.04 }
-      );
+  clearPhysics();
 
-      if (!body) return;
+  let currentPool = [...itemPool];
+  if (currentPool.length < 5) {
+    currentPool = shuffleArray([...ITEMS]);
+  }
 
-      Matter.World.add(engine.world, body);
-      bodiesRef.current.set(img.id, body);
+  const selected = currentPool.splice(0, 5);
+  setItemPool(currentPool);
+
+  selected.forEach((img, i) => {
+    const dynamicSrc = `/images/jogo/${img.id}_${sentidoAtivo}.png`;
+    const uniqueId = `${img.id}-${Date.now()}-${i}`;
+
+    // 1. Aumentamos o targetSize para o cigarro (que tem w: 80) cair grande
+    const isCigarro = img.id === 'cigarro';
+    const targetSize = isCigarro ? 280 : 180;
+    const autoScale = targetSize / Math.max(img.w, img.h);
+
+    activeItemsRef.current.set(uniqueId, {
+      ...img,
+      uniqueId,
+      src: dynamicSrc,
+      dynamicScale: autoScale
     });
-  };
+
+    const scaledVertices = img.vertices.map(part =>
+      part.map(v => ({ x: v.x * autoScale, y: v.y * autoScale }))
+    );
+
+    const startX = window.innerWidth / 2 + (Math.random() - 0.5) * 150;
+    const startY = -200 - i * 100;
+
+    // 2. Ajustamos o corpo físico: para o cigarro, damos +60 de altura invisível
+    // Isso garante que você consiga clicar nele facilmente no chão
+    const bodyWidth = img.w * autoScale;
+    const bodyHeight = isCigarro ? (img.h * autoScale) + 60 : img.h * autoScale;
+
+    const bodyOptions = {
+      restitution: 0.1,
+      friction: 0.5,
+      frictionAir: isCigarro ? 0.12 : 0.08, // Poste/Cigarro caem mais estáveis
+      density: 0.02 // Mais peso para evitar a tremedeira
+    };
+
+    // Usamos rectangle para o cigarro ter uma área de clique melhor que os vértices finos
+    const body = isCigarro 
+      ? Matter.Bodies.rectangle(startX, startY, bodyWidth, bodyHeight, bodyOptions)
+      : Matter.Bodies.fromVertices(startX, startY, scaledVertices, bodyOptions);
+
+    if (!body || body.parts.length <= 1) {
+      const fallbackBody = Matter.Bodies.rectangle(
+        startX, startY, bodyWidth, bodyHeight,
+        bodyOptions
+      );
+      Matter.World.add(engine.world, fallbackBody);
+      bodiesRef.current.set(uniqueId, fallbackBody);
+    } else {
+      Matter.World.add(engine.world, body);
+      bodiesRef.current.set(uniqueId, body);
+    }
+  });
+};
 
   const handleSlotClick = (slotId) => {
     if (answeredSlots[slotId]) return;
     setActiveSlotId(slotId);
-    spawnItems();
+    const slotNode = currentPrompt.nodes.find((n) => n.id === slotId);
+    spawnItems(slotNode.sentido);
+  };
+
+  const processRoundAndContinue = (isLastPrompt) => {
+    const roundItems = Object.keys(answeredSlots).map((slotId) => {
+      const answer = answeredSlots[slotId];
+      const baseItem = ITEMS.find((i) => i.id === answer.itemId);
+      return { ...baseItem, src: answer.src, uniqueId: `${baseItem.id}-${Date.now()}-${Math.random()}` };
+    });
+
+    setFinalItems((prev) => [...prev, ...roundItems]);
+
+    clearPhysics();
+
+    if (isLastPrompt) {
+      setIsGameFinished(true);
+    } else {
+      setPromptIndex((prev) => prev + 1);
+      setAnsweredSlots({});
+      setActiveSlotId(null);
+    }
   };
 
   const nextPrompt = () => {
-    if (promptIndex + 1 < PROMPTS.length) {
-      setPromptIndex((prev) => prev + 1);
-    } else {
-      setPromptIndex(0);
-    }
-    setAnsweredSlots({});
-    setActiveSlotId(null);
-    clearPhysics();
+    const isLastPrompt = promptIndex + 1 >= currentPromptsList.length;
+    processRoundAndContinue(isLastPrompt);
   };
 
   const sharePrompt = async () => {
-    const text = extractTextFromAnswers(currentPrompt.nodes, answeredSlots, ITEMS);
-    if (navigator.share) {
-      try {
-        await navigator.share({ title: "Minha Frase", text });
-      } catch (e) {
-        console.error("Erro ao compartilhar", e);
-      }
-    } else {
-      navigator.clipboard.writeText(text);
-      alert("Texto copiado para a área de transferência!");
+    if (!containerRef.current) return;
+
+    try {
+      const canvas = await html2canvas(containerRef.current, {
+        useCORS: true,
+        backgroundColor: "#f9f9f9",
+        scale: 2 
+      });
+
+      canvas.toBlob(async (blob) => {
+        if (!blob) return;
+
+        const file = new File([blob], "minha-frase.jpg", { type: "image/jpeg" });
+
+        if (navigator.share && navigator.canShare && navigator.canShare({ files: [file] })) {
+          try {
+            await navigator.share({
+              title: "Minha Frase",
+              files: [file]
+            });
+          } catch (e) {
+            console.error("Erro ao compartilhar", e);
+          }
+        } else {
+          const url = URL.createObjectURL(blob);
+          const a = document.createElement("a");
+          a.href = url;
+          a.download = "minha-frase.jpg";
+          a.click();
+          URL.revokeObjectURL(url);
+        }
+      }, "image/jpeg", 0.9);
+
+    } catch (error) {
+      console.error("Erro ao gerar a imagem:", error);
     }
   };
 
   /* =========================
-     DRAG & DROP
+      DRAG & DROP
   ========================= */
   useEffect(() => {
     function handlePointerDown(e) {
@@ -144,16 +249,22 @@ export default function App() {
       
       if (!found) return;
 
-      const item = ITEMS.find((i) => bodiesRef.current.get(i.id) === found);
+      const bodyEntry = Array.from(bodiesRef.current.entries()).find(([uid, b]) => b === found);
+      if (!bodyEntry) return;
+
+      const [uniqueId] = bodyEntry;
+      const item = activeItemsRef.current.get(uniqueId);
       if (!item) return;
 
       Matter.World.remove(engineRef.current.world, found);
-      bodiesRef.current.delete(item.id);
+      bodiesRef.current.delete(uniqueId);
+
+      const itemScale = item.dynamicScale || SCALE;
 
       setDraggingItem({
         ...item,
-        offsetX: (item.w * SCALE) / 2,
-        offsetY: (item.h * SCALE) / 2,
+        offsetX: (item.w * itemScale) / 2,
+        offsetY: (item.h * itemScale) / 2,
         x: e.clientX,
         y: e.clientY,
       });
@@ -174,39 +285,69 @@ export default function App() {
 
       if (activeSlotId) {
         const slotEl = slotRefs.current.get(activeSlotId);
-        if (slotEl) {
-          const rect = slotEl.getBoundingClientRect();
-          const inside =
-            e.clientX >= rect.left &&
-            e.clientX <= rect.right &&
-            e.clientY >= rect.top &&
-            e.clientY <= rect.bottom;
+        // Localize isso dentro do handlePointerUp:
+if (slotEl) {
+  const rect = slotEl.getBoundingClientRect();
+  
+  // Aumentamos a margem para o poste ser aceito mais fácil (o 80 e o 100 facilitam o encaixe)
+  const isPoste = draggingItem.id === 'poste';
+  const horizontalMargin = isPoste ? 80 : 20; 
+  const verticalMargin = isPoste ? 100 : 50;
 
-          if (inside) {
-            droppedInActiveSlot = true;
-          }
-        }
+  if (
+    e.clientX >= rect.left - horizontalMargin &&
+    e.clientX <= rect.right + horizontalMargin &&
+    e.clientY >= rect.top - verticalMargin &&
+    e.clientY <= rect.bottom + verticalMargin
+  ) {
+    droppedInActiveSlot = true;
+  }
+}
       }
 
       if (droppedInActiveSlot && activeSlotId) {
-        setAnsweredSlots((prev) => ({ ...prev, [activeSlotId]: draggingItem.id }));
+        setAnsweredSlots((prev) => ({ 
+          ...prev, 
+          [activeSlotId]: { 
+            itemId: draggingItem.id, 
+            src: draggingItem.src,
+            scale: draggingItem.dynamicScale 
+          } 
+        }));
         setActiveSlotId(null);
         clearPhysics();
       } else {
         const engine = engineRef.current;
         if (engine) {
+          const currentScale = draggingItem.dynamicScale || SCALE;
           const scaledVertices = draggingItem.vertices.map(part => 
-            part.map(v => ({ x: v.x * SCALE, y: v.y * SCALE }))
+            part.map(v => ({ x: v.x * currentScale, y: v.y * currentScale }))
           );
+          
+          const bodyOptions = { 
+            restitution: 0.1, 
+            friction: 0.5, 
+            frictionAir: 0.08, 
+            density: 0.01 
+          };
+
           const body = Matter.Bodies.fromVertices(
             e.clientX,
             e.clientY,
             scaledVertices,
-            { restitution: 0.05, friction: 0.9, frictionAir: 0.04 }
+            bodyOptions
           );
-          if (body) {
+
+          if (!body || body.parts.length <= 1) {
+            const fallbackBody = Matter.Bodies.rectangle(
+              e.clientX, e.clientY, draggingItem.w * currentScale, draggingItem.h * currentScale,
+              bodyOptions
+            );
+            Matter.World.add(engine.world, fallbackBody);
+            bodiesRef.current.set(draggingItem.uniqueId, fallbackBody);
+          } else {
             Matter.World.add(engine.world, body);
-            bodiesRef.current.set(draggingItem.id, body);
+            bodiesRef.current.set(draggingItem.uniqueId, body);
           }
         }
       }
@@ -226,8 +367,16 @@ export default function App() {
   }, [draggingItem, activeSlotId]);
 
   /* =========================
-     RENDER
+      RENDER
   ========================= */
+  if (isGameFinished) {
+    return <FinalPoster selectedItems={finalItems} />;
+  }
+
+  if (!currentPrompt) {
+    return <div style={{ display: "flex", height: "100vh", width: "100vw", justifyContent: "center", alignItems: "center", fontSize: "2rem", color: "#000", backgroundColor: "#f9f9f9" }}>Carregando jogo...</div>;
+  }
+
   return (
     <main
       ref={containerRef}
@@ -239,7 +388,8 @@ export default function App() {
         fontFamily: "system-ui, sans-serif",
         userSelect: "none",
         WebkitUserSelect: "none",
-        backgroundColor: "#f9f9f9"
+        backgroundColor: "#f9f9f9",
+        cursor: draggingItem ? "grabbing" : "auto"
       }}
     >
       <style dangerouslySetInnerHTML={{ __html: `
@@ -265,10 +415,13 @@ export default function App() {
         padding: "2rem"
       }}>
         <div style={{
-          fontSize: "48px",
-          lineHeight: "1.5",
+          fontSize: "75px",
+          maxWidth: "80vw",
+          lineHeight: "1.15",
           textAlign: "center",
           whiteSpace: "pre-wrap",
+          color: "#191919",
+          fontWeight: "bold"
         }}>
           {currentPrompt.nodes.map((node, i) => {
             if (node.type === "text") {
@@ -276,61 +429,42 @@ export default function App() {
             }
 
             if (node.type === "slot") {
-              const answerId = answeredSlots[node.id];
+              const answer = answeredSlots[node.id];
               const isActive = activeSlotId === node.id;
 
-              if (answerId) {
-                const item = ITEMS.find((it) => it.id === answerId);
-                if (!item) return null;
+              // --- AQUI É ONDE AJUSTAMOS O TAMANHO DO CIGARRO ---
+              const isCigarro = (draggingItem && draggingItem.id === 'cigarro') || (answer && answer.itemId === 'cigarro');
+              const mult = isCigarro ? 1.2 : 1; 
+
+              if (answer) {
+                const itemBase = ITEMS.find((it) => it.id === answer.itemId);
+                const currentScale = (answer.scale || SCALE) * mult;
                 return (
-                  <img
-                    key={node.id}
-                    src={item.src}
-                    alt={item.label}
-                    style={{
-                      display: "inline-block",
-                      width: item.w * SCALE,
-                      height: item.h * SCALE,
-                      verticalAlign: "middle",
-                      margin: "0 8px",
-                      pointerEvents: "none"
-                    }}
-                  />
+                  <span key={node.id} style={{ display: "inline-block", width: itemBase.w * currentScale, height: 80, position: "relative", verticalAlign: "middle", margin: "0 8px" }}>
+                    <img src={answer.src} alt="" style={{ position: "absolute", top: "50%", left: "50%", transform: "translate(-50%, -50%)", width: itemBase.w * currentScale, height: itemBase.h * currentScale, objectFit: "contain", pointerEvents: "none" }} />
+                  </span>
                 );
               }
 
-              const w = draggingItem && isActive ? draggingItem.w * SCALE : DEFAULT_SLOT_W;
-              const h = draggingItem && isActive ? draggingItem.h * SCALE : DEFAULT_SLOT_H;
-              const pathStr = draggingItem && isActive ? draggingItem.svgPath : DEFAULT_SLOT_PATH;
+              const activeScale = (draggingItem && isActive ? (draggingItem.dynamicScale || SCALE) : SCALE) * mult;
+              const svgW = draggingItem && isActive ? draggingItem.w * activeScale : DEFAULT_SLOT_W;
+              const svgH = draggingItem && isActive ? draggingItem.h * activeScale : DEFAULT_SLOT_H;
 
               return (
                 <span
                   key={node.id}
-                  ref={(el) => {
-                    if (el) slotRefs.current.set(node.id, el);
-                  }}
+                  ref={(el) => { if (el) slotRefs.current.set(node.id, el); }}
                   onClick={() => handleSlotClick(node.id)}
-                  style={{
-                    display: "inline-block",
-                    width: w,
-                    height: h,
-                    verticalAlign: "middle",
-                    margin: "0 8px",
-                    cursor: isActive ? "default" : "pointer",
-                    transition: "width 0.2s, height 0.2s"
-                  }}
+                  style={{ display: "inline-block", width: Math.max(svgW, 80), height: 80, position: "relative", verticalAlign: "middle", margin: "0 8px", cursor: "pointer" }}
                 >
-                  <svg 
-                    width={w} 
-                    height={h} 
-                    viewBox={draggingItem && isActive ? `0 0 ${draggingItem.w} ${draggingItem.h}` : `0 0 ${DEFAULT_SLOT_W} ${DEFAULT_SLOT_H}`}
-                    style={{ overflow: "visible" }}
-                  >
+                  <svg width={svgW} height={svgH} viewBox={draggingItem && isActive ? `0 0 ${draggingItem.w} ${draggingItem.h}` : `0 0 ${DEFAULT_SLOT_W} ${DEFAULT_SLOT_H}`} style={{ overflow: "visible", position: "absolute", top: "50%", left: "50%", transform: "translate(-50%, -50%)" }}>
                     <path
-                      d={pathStr}
+                      d={draggingItem && isActive ? draggingItem.svgPath : DEFAULT_SLOT_PATH}
                       className="slot-path"
                       style={{
-                        stroke: isActive ? "#000" : "#ccc",
+                        stroke: isActive ? "#001bff" : "#ccc",
+                        strokeWidth: "2px",
+                        vectorEffect: "non-scaling-stroke", // ISSO DEIXA A LINHA FINA
                         animationPlayState: isActive ? "running" : "paused"
                       }}
                     />
@@ -338,6 +472,7 @@ export default function App() {
                 </span>
               );
             }
+            return null;
           })}
         </div>
 
@@ -345,46 +480,79 @@ export default function App() {
           <div style={{ marginTop: "40px", display: "flex", gap: "20px" }}>
             <button 
               onClick={nextPrompt}
-              style={{ padding: "16px 32px", fontSize: "20px", cursor: "pointer" }}
+              title={promptIndex + 1 >= currentPromptsList.length ? "Finalizar" : "Próxima frase"}
+              style={{ padding: "8px", cursor: "pointer", border: "none", background: "none", color: "#001bff", display: "flex", alignItems: "center", justifyContent: "center" }}
             >
-              Próxima frase
+              {promptIndex + 1 >= currentPromptsList.length ? (
+                <svg width="48" height="48" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                  <polyline points="20 6 9 17 4 12"></polyline>
+                </svg>
+              ) : (
+                <svg width="48" height="48" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                  <line x1="5" y1="12" x2="19" y2="12"></line>
+                  <polyline points="12 5 19 12 12 19"></polyline>
+                </svg>
+              )}
             </button>
             <button 
               onClick={sharePrompt}
-              style={{ padding: "16px 32px", fontSize: "20px", cursor: "pointer" }}
+              title="Compartilhar"
+              style={{ padding: "8px", cursor: "pointer", border: "none", background: "none", color: "#001bff", display: "flex", alignItems: "center", justifyContent: "center" }}
             >
-              Compartilhar
+              <svg width="48" height="48" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                <path d="M4 12v8a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2v-8"></path>
+                <polyline points="16 6 12 2 8 6"></polyline>
+                <line x1="12" y1="2" x2="12" y2="15"></line>
+              </svg>
             </button>
           </div>
         )}
       </div>
 
+      {/* Itens que estão no chão (física) */}
       {physicsItems.map((item) => (
         <div
-          key={item.id}
+          key={item.uniqueId}
           style={{
             position: "absolute",
-            left: item.x - (item.w * SCALE) / 2,
-            top: item.y - (item.h * SCALE) / 2,
+            left: item.x - (item.w * (item.dynamicScale || SCALE)) / 2,
+            top: item.y - (item.h * (item.dynamicScale || SCALE)) / 2,
             transform: `rotate(${item.angle}rad)`,
-            pointerEvents: "none",
+            pointerEvents: "auto", // IMPORTANTE: permite clicar/pegar o item
+            cursor: "grab",        // Cursor de "mão aberta" para pegar
+            zIndex: 40
           }}
         >
-          <Image src={item.src} alt="" width={item.w * SCALE} height={item.h * SCALE} draggable={false} />
+          <Image 
+            src={item.src} 
+            alt="" 
+            width={item.w * (item.dynamicScale || SCALE)} 
+            height={item.h * (item.dynamicScale || SCALE)} 
+            draggable={false} 
+          />
         </div>
       ))}
 
+      {/* Item que está sendo arrastado (na mão) */}
       {draggingItem && (
         <div
           style={{
             position: "absolute",
+            // Ajustamos o X e Y para o mouse ficar no centro do item ao arrastar
             left: draggingItem.x,
             top: draggingItem.y,
-            pointerEvents: "none",
-            zIndex: 100,
+            pointerEvents: "none", // IMPORTANTE: evita que o item bloqueie o detector do Slot
+            zIndex: 1000,
+            cursor: "grabbing"     // Cursor de "mão fechada"
           }}
         >
-          <Image src={draggingItem.src} alt="" width={draggingItem.w * SCALE} height={draggingItem.h * SCALE} draggable={false} />
+          <Image 
+            src={draggingItem.src} 
+            alt="" 
+            width={draggingItem.w * (draggingItem.dynamicScale || SCALE)} 
+            height={draggingItem.h * (draggingItem.dynamicScale || SCALE)} 
+            draggable={false} 
+          />
         </div>
       )}
     </main>

@@ -1,95 +1,163 @@
 'use client'
 
 import { useState } from 'react';
-import Image from 'next/image'; //
+import Image from 'next/image';
+import { motion, AnimatePresence } from 'framer-motion';
+import Menu from "../../components/Menu";
 
 export default function Loja() {
-  // Estado para controlar o portão e os detalhes do produto
+  // --- TUDO QUE É LÓGICA FICA AQUI DENTRO ---
   const [gateOpen, setGateOpen] = useState(false);
-  const [modalItem, setModalItem] = useState({ 
-    open: false, 
-    name: '', 
-    price: '', 
-    description: '' 
-  });
+  const [carrinho, setCarrinho] = useState([]);
+  const [isCheckoutOpen, setIsCheckoutOpen] = useState(false);
+
+  const produtos = [
+    { id: 1, name: 'Casaco oque vc sente', price: 'R$ 89,90', img: '/images/CASACO2.png', top: '15%', left: '5%', size: 420 },
+    { id: 2, name: 'Boné Sinapse', price: 'R$ 59,90', img: '/images/bone.png', top: '30%', left: '40%', size: 200 },
+    { id: 3, name: 'Casaco Sentidos', price: 'R$ 150,00', img: '/images/CASACO.png', top: '55%', left: '5%', size: 420 },
+    { id: 4, name: 'Garrafas', price: 'R$ 50,00', img: '/images/GARRAFAS.png', top: '67%', left: '38%', size: 270 },
+    { id: 5, name: 'Ecobag White', price: 'R$ 20,00', img: '/images/ecobag1.png', top: '58%', left: '27%', size: 150 },
+    { id: 6, name: 'Ecobag Black', price: 'R$ 20,00', img: '/images/ecobag 2.png', top: '18%', left: '27%', size: 150 },
+  ];
+
+  const tocarSomPortao = () => {
+    const audio = new Audio("/images/portao.mp3");
+    audio.volume = 0.5;
+    audio.play().catch(err => console.log("Erro ao tocar som:", err));
+  };
+
+  const addToCart = (produto) => {
+    const novoItem = { ...produto, cartId: Math.random() };
+    setCarrinho((prev) => [...prev, novoItem]);
+  };
+
+  const removeFromCart = (cartId) => {
+    setCarrinho((prev) => prev.filter(item => item.cartId !== cartId));
+  };
+
+  const total = carrinho.reduce((acc, item) => {
+    const preco = parseFloat(item.price.replace('R$ ', '').replace(',', '.'));
+    return acc + preco;
+  }, 0);
 
   return (
-    <div className="relative w-full h-screen bg-[#1a1a1a] overflow-hidden">
+    <div className="relative w-full h-screen bg-black overflow-hidden">
+      <Menu iconePersonalizado="/images/menu4.png" tamanho={100} />
       
-      {/* 1. PORTÃO DE METAL */}
-      <div 
-        onClick={() => setGateOpen(true)}
-        className={`fixed inset-0 z-[100] flex items-center justify-center transition-transform duration-[1500ms] ease-in-out cursor-pointer ${
-          gateOpen ? "-translate-y-full" : "translate-y-0"
-        }`}
-      >
-        {/* A SUA IMAGEM DO PORTÃO */}
-        <Image 
-          src="/images/portao.png" // <--- COLOQUE O NOME DO SEU ARQUIVO AQUI
-          alt="Portão da Loja"
-          fill
-          className="object-cover"
-          priority
-        />
+      {/* 1. PORTÃO */}
+      <AnimatePresence>
+        {!gateOpen && (
+          <motion.div 
+            exit={{ y: '-100%' }}
+            transition={{ duration: 5.5, ease: "easeInOut" }}
+            onClick={() => {
+              setGateOpen(true);
+              tocarSomPortao();
+            }}
+            className="fixed inset-0 z-[100] cursor-pointer"
+          >
+            <Image src="/images/portao.png" alt="Portão" fill className="object-cover" priority />
+          </motion.div>
+        )}
+      </AnimatePresence>
 
-        {/* TEXTO EM CIMA DA IMAGEM (OPCIONAL) */}
-        <div className="relative z-10 bg-black/50 text-white p-4 rounded-xl border border-white animate-bounce font-bold">
-          CLIQUE PARA ABRIR
+      {/* 2. FUNDO DA LOJA */}
+      <div className="absolute inset-0">
+        <Image src="/images/fundoloja.png" alt="Loja" fill className="object-cover" />
+      </div>
+
+      {/* 3. PRODUTOS */}
+      {produtos.map((p) => (
+        <motion.div
+          key={p.id}
+          drag
+          dragSnapToOrigin={true}
+          onDragEnd={(e, info) => {
+            if (info.point.x > window.innerWidth - 350 && info.point.y > window.innerHeight - 350) {
+              addToCart(p);
+            }
+          }}
+          className="absolute z-10 cursor-grab active:cursor-grabbing"
+          style={{ top: p.top, left: p.left }}
+        >
+          <Image src={p.img} alt={p.name} width={p.size} height={p.size} className="pointer-events-none object-contain drop-shadow-lg" />
+        </motion.div>
+      ))}
+
+      {/* 4. CARRINHO INTERATIVO */}
+      <div 
+        className="absolute bottom-2 right-2 z-20 cursor-pointer"
+        onClick={() => carrinho.length > 0 && setIsCheckoutOpen(true)}
+      >
+        <div className="relative w-80 h-80 flex items-center justify-center group">
+          <Image src="/images/carrinho.png" alt="Carrinho" width={320} height={320} className="object-contain drop-shadow-2xl transition-transform group-hover:scale-105" />
+          <div className="absolute inset-0 flex items-center justify-center pointer-events-none">
+            <AnimatePresence>
+              {carrinho.map((item, index) => (
+                <motion.div
+                  key={item.cartId}
+                  initial={{ scale: 0, y: -100, opacity: 0 }}
+                  animate={{ 
+                    scale: 0.5, 
+                    y: -15, 
+                    x: (index * 15) - (carrinho.length * 7), 
+                    opacity: 1,
+                  }}
+                  exit={{ scale: 0, opacity: 0 }}
+                  className="absolute"
+                >
+                  <Image src={item.img} alt={item.name} width={120} height={120} className="drop-shadow-md" />
+                </motion.div>
+              ))}
+            </AnimatePresence>
+          </div>
+          {carrinho.length > 0 && (
+            <div className="absolute top-10 right-10 bg-red-600 text-white rounded-full w-12 h-12 flex items-center justify-center font-bold text-2xl shadow-xl border-2 border-white z-50">
+              {carrinho.length}
+            </div>
+          )}
         </div>
       </div>
 
-      {/* 2. INTERIOR DA LOJA */}
-      <main className="p-10 text-center text-white h-full overflow-y-auto">
-        <h1 className="text-4xl font-bold mb-10 text-[#0004FF]">Loja Sinapse</h1>
-        
-        <div className="flex justify-center gap-10 flex-wrap">
-          {/* Produto 1 */}
-          <div 
-            className="bg-[#222] p-5 border-b-4 border-[#0004FF] cursor-pointer hover:scale-105 transition-transform rounded-lg"
-            onClick={() => setModalItem({ 
-              open: true, 
-              name: 'Camiseta Classic', 
-              price: 'R$ 89,90',
-              description: 'Camiseta 100% algodão com estampa exclusiva Sinapse.' 
-            })}
+      {/* 5. MODAL DE CHECKOUT */}
+      <AnimatePresence>
+        {isCheckoutOpen && (
+          <motion.div 
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 1 }}
+            exit={{ opacity: 0 }}
+            className="fixed inset-0 z-[150] bg-black/80 flex items-center justify-center p-4 backdrop-blur-sm"
           >
-            <div className="w-40 h-40 bg-gray-600 mb-4 flex items-center justify-center rounded">FOTO</div>
-            <p className="font-semibold text-lg text-white">Camiseta Classic</p>
-            <p className="text-[#0004FF]">R$ 89,90</p>
-          </div>
-        </div>
-      </main>
-
-      {/* 3. MODAL DE DETALHES */}
-      {modalItem.open && (
-        <div 
-          className="fixed inset-0 bg-black/90 z-[200] flex items-center justify-center p-4"
-          onClick={() => setModalItem({ ...modalItem, open: false })}
-        >
-          <div 
-            className="bg-white p-8 rounded-2xl text-black relative max-w-md w-full shadow-2xl"
-            onClick={(e) => e.stopPropagation()} 
-          >
-            <button 
-              className="absolute top-4 right-4 text-3xl font-light hover:text-red-500 transition-colors" 
-              onClick={() => setModalItem({ ...modalItem, open: false })}
+            <motion.div 
+              initial={{ scale: 0.8, y: 50 }}
+              animate={{ scale: 1, y: 0 }}
+              className="bg-white text-black w-full max-w-lg rounded-3xl p-8 relative max-h-[80vh] overflow-y-auto"
             >
-              &times;
-            </button>
-            
-            <h2 className="text-3xl font-bold text-[#0004FF] mb-2">{modalItem.name}</h2>
-            <p className="text-xl font-semibold mb-4 text-gray-800">{modalItem.price}</p>
-            <hr className="mb-4" />
-            <p className="text-gray-600 leading-relaxed">
-              {modalItem.description}
-            </p>
-            
-            <button className="w-full mt-6 bg-[#0004FF] text-white py-3 rounded-lg font-bold hover:bg-blue-700 transition-colors">
-              Adicionar ao Carrinho
-            </button>
-          </div>
-        </div>
-      )}
+              <button onClick={() => setIsCheckoutOpen(false)} className="absolute top-4 right-4 text-2xl font-bold text-gray-400 hover:text-black">✕</button>
+              <h2 className="text-3xl font-black mb-6 text-[#0004FF]">SEU CARRINHO</h2>
+              <div className="space-y-4 mb-8">
+                {carrinho.map((item) => (
+                  <div key={item.cartId} className="flex items-center justify-between border-b pb-4">
+                    <div className="flex items-center gap-4">
+                      <Image src={item.img} alt={item.name} width={60} height={60} />
+                      <div>
+                        <p className="font-bold">{item.name}</p>
+                        <p className="text-gray-500 text-sm">{item.price}</p>
+                      </div>
+                    </div>
+                    <button onClick={() => removeFromCart(item.cartId)} className="bg-red-100 text-red-600 px-3 py-1 rounded-full text-xs font-bold">REMOVER</button>
+                  </div>
+                ))}
+              </div>
+              <div className="flex items-center justify-between text-2xl font-black mb-6">
+                <span>TOTAL:</span>
+                <span className="text-[#0004FF]">R$ {total.toFixed(2)}</span>
+              </div>
+              <button onClick={() => alert("Compra confirmada! 🧠")} className="w-full bg-[#0004FF] text-white py-4 rounded-full font-black text-xl">CONFIRMAR PRODUTOS</button>
+            </motion.div>
+          </motion.div>
+        )}
+      </AnimatePresence>
     </div>
   );
 }

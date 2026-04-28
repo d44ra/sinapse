@@ -1,55 +1,91 @@
+"use client";
+
 import Image from "next/image";
-import Link from "next/link"; // Já está aqui, boa!
+import AnimatedStar from "@/components/AnimatedStar";
 
 export default function Home() {
   return (
-    <div className="flex flex-col flex-1 items-center justify-center bg-zinc-50 font-sans dark:bg-black">
-      <main className="flex flex-1 w-full max-w-3xl flex-col items-center justify-between py-32 px-16 bg-white dark:bg-black sm:items-start">
+    // Mudei o bg-white para bg-red-500 só para você testar. 
+    // Se a tela ficar vermelha, o código ATUALIZOU. Aí você volta para bg-white.
+    <main className="relative w-full h-screen bg-white overflow-hidden select-none">
+      
+      {/* NOME DO PROJETO + SLOGAN */}
+      <div className="absolute top-10 left-10 z-50 flex flex-col pointer-events-none">
         <Image
-          className="dark:invert"
-          src="/next.svg"
-          alt="Next.js logo"
-          width={100}
-          height={20}
+          src="/images/sinapse-logo.png"
+          alt="Sinapse"
+          width={350}
+          height={100}
+          className="w-[350px] h-auto"
           priority
         />
-        
-        <div className="flex flex-col items-center gap-6 text-center sm:items-start sm:text-left">
-          <h1 className="max-w-xs text-3xl font-semibold leading-10 tracking-tight text-black dark:text-zinc-50">
-            Bem-vindo ao projeto Sinapse
-          </h1>
-          
-          <p className="max-w-md text-lg leading-8 text-zinc-600 dark:text-zinc-400">
-            Explore nossa coleção e novidades clicando no botão abaixo para abrir a loja.
+        <div className="mt-4">
+          <p className="pl-16 text-lg text-black font-bold border-l-4 border-[#0004FF] ml-4 py-1 uppercase tracking-tighter">
+            explore o site como você explora<br />
+            a cidade de São Paulo
           </p>
-
-          {/* O SEU BOTÃO ADICIONADO AQUI: */}
-          <Link 
-            href="/loja" 
-            className="mt-4 px-8 py-3 bg-[#0004FF] text-white rounded-full font-bold hover:scale-105 transition-transform shadow-lg no-underline"
-          >
-            ENTRAR NA LOJA
-          </Link>
         </div>
+      </div>
 
-        <div className="flex flex-col gap-4 text-base font-medium sm:flex-row mt-10">
-          <a
-            className="flex h-12 w-full items-center justify-center gap-2 rounded-full bg-foreground px-5 text-background transition-colors hover:bg-[#383838] dark:hover:bg-[#ccc] md:w-[158px]"
-            href="https://vercel.com/new"
-            target="_blank"
-            rel="noopener noreferrer"
-          >
-            <Image
-              className="dark:invert"
-              src="/vercel.svg"
-              alt="Vercel logomark"
-              width={16}
-              height={16}
-            />
-            Deploy Now
-          </a>
-        </div>
-      </main>
-    </div>
+      {/* MAPA CENTRAL */}
+      <div className="absolute inset-0 flex items-center justify-center pointer-events-none">
+        <Image
+          src="/images/mapa-sp.png"
+          alt="Mapa da cidade de São Paulo"
+          width={600}
+          height={600}
+          className="object-contain opacity-80"
+          priority
+        />
+      </div>
+
+      {/* ESTRELAS (Com caminho corrigido para a sua pasta) */}
+      <div className="relative w-full h-full z-30">
+          <AnimatedStar
+            label="Sobre Nós"
+            href="/sobre-nos"
+            initialX={15}
+            initialY={30}
+            duration={15}
+            src="/images/vectors/star1.svg"
+          />
+          <AnimatedStar
+            label="Mídia"
+            href="/midia"
+            initialX={75}
+            initialY={25}
+            duration={12}
+            src="/images/vectors/star2.svg"
+          />
+          <AnimatedStar
+            label="Os Sentidos"
+            href="/os-sentidos"
+            initialX={25}
+            initialY={70}
+            duration={10}
+            src="/images/vectors/star4.svg"
+          />
+          <AnimatedStar
+            label="Comunidade"
+            href="/comunidade"
+            initialX={55}
+            initialY={70}
+            duration={10}
+            src="/images/vectors/star5.svg"
+          />
+      </div>
+
+      {/* LOGO FUNDO */}
+      <div className="absolute bottom-10 left-10 z-0 opacity-50 pointer-events-none">
+        <Image 
+          src="/images/sinapse_logo.png" 
+          alt="Logo Grande" 
+          width={450} 
+          height={150} 
+          className="h-auto"
+        />
+      </div>
+      
+    </main>
   );
 }
